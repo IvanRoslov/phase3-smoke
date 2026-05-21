@@ -1,0 +1,43 @@
+# Lessly Phase 3 smoke test — exercises the full compose-first flow:
+#   • non-root images (PSA restricted passes)
+#   • named volume mounted into db (PVC + mount strip)
+#   • ${VAR} compose variables (wizard step)
+#   • depends_on chain (init-container wait-for-port)
+#   • multi-service private DNS (api → cache, api → db by slug)
+#
+# Apply via Lessly canvas:
+#   Repo URL:  https://github.com/IvanRoslov/phase3-smoke
+#   Branch:    main
+#   Path:      compose.yaml
+#
+# You will be asked for two values during import:
+#   DB_PASSWORD  (mark Secret)
+#   TAG          (any string, e.g. v1)
+
+services:
+  cache:
+    image: bitnami/redis:7.4
+    environment:
+      ALLOW_EMPTY_PASSWORD: "yes"
+
+  db:
+    image: bitnami/postgresql:16
+    environment:
+      POSTGRESQL_USERNAME: app
+      POSTGRESQL_PASSWORD: ${DB_PASSWORD}
+      POSTGRESQL_DATABASE: app
+    volumes:
+      - db_data:/bitnami/postgresql
+
+  api:
+    image: nginxinc/nginx-unprivileged:1.27-alpine
+    environment:
+      DATABASE_URL: postgresql://app:${DB_PASSWORD}@db:5432/app
+      CACHE_URL: redis://cache:6379
+      VERSION: ${TAG}
+    depends_on:
+      - cache
+      - db
+
+volumes:
+  db_data:
