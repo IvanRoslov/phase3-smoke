@@ -1,39 +1,30 @@
 # Lessly Phase 3 smoke test — exercises the full compose-first flow:
-#   • non-root images (PSA restricted passes)
-#   • named volume mounted into db (PVC + mount strip)
-#   • ${VAR} compose variables (wizard step)
+#   • non-root images (PSA restricted passes — all run nginx-unprivileged
+#     under UID 101, which is the only public image we can rely on for
+#     anonymous pulls + PSA-restricted compatibility right now)
+#   • named volume mounted into db (PVC + mount strip in canvas)
+#   • ${VAR} compose variables (wizard step prompts for TAG)
 #   • depends_on chain (init-container wait-for-port)
-#   • multi-service private DNS (api → cache, api → db by slug)
+#   • multi-service private DNS (api waits on cache:8080 and db:8080 by slug)
 #
-# Apply via Lessly canvas:
-#   Repo URL:  https://github.com/IvanRoslov/phase3-smoke
-#   Branch:    main
-#   Path:      compose.yaml
-#
-# You will be asked for two values during import:
-#   DB_PASSWORD  (mark Secret)
-#   TAG          (any string, e.g. v1)
+# All three pods serve nginx on port 8080 — they're not real redis/postgres,
+# they're stand-ins to verify the runtime mechanics (init ordering, mount,
+# private DNS) end-to-end. Once Phase 5 ships managed databases, swap in
+# real bitnami images at the cgr.dev/chainguard registry, or after we wire
+# image-pull credentials for private registries.
 
 services:
   cache:
-    image: bitnami/redis:7.4
-    environment:
-      ALLOW_EMPTY_PASSWORD: "yes"
+    image: nginxinc/nginx-unprivileged:1.27-alpine
 
   db:
-    image: bitnami/postgresql:16
-    environment:
-      POSTGRESQL_USERNAME: app
-      POSTGRESQL_PASSWORD: ${DB_PASSWORD}
-      POSTGRESQL_DATABASE: app
+    image: nginxinc/nginx-unprivileged:1.27-alpine
     volumes:
-      - db_data:/bitnami/postgresql
+      - db_data:/tmp/data
 
   api:
     image: nginxinc/nginx-unprivileged:1.27-alpine
     environment:
-      DATABASE_URL: postgresql://app:${DB_PASSWORD}@db:5432/app
-      CACHE_URL: redis://cache:6379
       VERSION: ${TAG}
     depends_on:
       - cache
